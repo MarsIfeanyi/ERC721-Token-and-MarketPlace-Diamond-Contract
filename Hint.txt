@@ -1,0 +1,17 @@
+Diamond Standard - Upgradeable Contracts 
+
+a Diamond is a contract with external functions that are supplied by contracts called facets.
+ Facets are separate, independent contracts that can share internal functions, libraries and state variables.
+
+ any function defined inside Diamond.sol is immutable
+ Diamond.sol consists of constructor  
+ contains a fallback function.
+ msg.sig - bytes4 - function selector
+ assembly{}
+
+ facets - consist of contracts that make up the diamond.
+ libraries - code sharable between the contracts 
+
+ in diamond standard, there is no multiple struct, just one struct -to uphold structure.
+
+ forge inspect Marketplace methodIdentifiers

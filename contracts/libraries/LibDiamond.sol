@@ -34,6 +34,16 @@ library LibDiamond {
         uint256 facetAddressPosition; // position of facetAddress in facetAddresses array
     }
 
+    struct ListingInfo {
+        address token;
+        uint256 tokenId;
+        uint256 price;
+        bytes signature;
+        uint256 deadline;
+        address seller;
+        bool isActive;
+    }
+
     struct DiamondStorage {
         // maps function selector to the facet address and
         // the position of the selector in the facetFunctionSelectors.selectors array
@@ -62,16 +72,6 @@ library LibDiamond {
         address admin;
         uint256 listingId;
         address token;
-    }
-
-    struct ListingInfo {
-        address token;
-        uint256 tokenId;
-        uint256 price;
-        bytes signature;
-        uint256 deadline;
-        address seller;
-        bool isActive;
     }
 
     function diamondStorage()

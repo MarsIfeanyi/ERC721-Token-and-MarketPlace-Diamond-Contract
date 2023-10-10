@@ -16,10 +16,11 @@ contract DiamondDeployer is DiamondUtils, IDiamondCut {
     DiamondLoupeFacet dLoupeFacet;
     OwnershipFacet ownerFacet;
     ERC721Facet erc721Facet;
+    ERC721Facet ERC721_Diamond;
 
-    string name = "MarsEnergy";
-    string symbol = "Mars";
-    uint8 public immutable decimals = 18;
+    string name = "Bridge Waters Associates";
+    string symbol = "BWA";
+    address NftAddress;
 
     address user1 = vm.addr(0x1);
     address user2 = vm.addr(0x2);
@@ -27,13 +28,18 @@ contract DiamondDeployer is DiamondUtils, IDiamondCut {
     function setUp() public {
         //deploy facets
         dCutFacet = new DiamondCutFacet();
-        diamond = new Diamond(address(this), address(dCutFacet), name, symbol);
+        diamond = new Diamond(
+            address(this),
+            address(dCutFacet),
+            name,
+            symbol,
+            NftAddress
+        );
         dLoupeFacet = new DiamondLoupeFacet();
         ownerFacet = new OwnershipFacet();
         erc721Facet = new ERC721Facet();
 
-        //upgrade diamond with facets
-
+        ERC721_Diamond = ERC721Facet(address(diamond));
         //build cut struct
         FacetCut[] memory cut = new FacetCut[](3);
 
@@ -69,131 +75,94 @@ contract DiamondDeployer is DiamondUtils, IDiamondCut {
         DiamondLoupeFacet(address(diamond)).facetAddresses();
     }
 
-    function testerc721Facet_Name() public {
-        // binding the contract type and the diamond address...This is like binding the ABI to an address, becuase the Diamond itself does not contain the function, name(). its only the erc721Facet that contains the function name(),but you are not calling name on the facet, you are calling it on the Diamond Hint: erc721Facet contains the ABI, while Diamond contains the storage.
-
-        assertEq(ERC721Facet(address(diamond)).name(), name);
-
-        // Hint: Since you have moved the storage from the erc721Facet the DiamondStorage() struct, and there is no visibility in struct you will have to write the getter function for each of the stroage variable
+    function testERC721Facet_Name() public {
+        assertEq(ERC721_Diamond.name(), name);
     }
 
-    function testerc721Facet_Symbol() public {
-        assertEq(ERC721Facet(address(diamond)).symbol(), symbol);
+    function testERC721Facet_Symbol() public {
+        assertEq(ERC721_Diamond.symbol(), symbol);
     }
 
-    function testerc721Facet_Transfer() public {
-        vm.startPrank(user1);
-
-        uint256 mintAmout = 10000e18;
-        uint256 transferAmount = 50e18;
-        uint256 balanceAfterTransfer = mintAmout - transferAmount;
-
-        ERC721Facet(address(diamond)).mint(user1, mintAmout);
-
-        erc721Facet(address(diamond)).transfer(user2, transferAmount);
-
-        assertEq(
-            erc721Facet(address(diamond)).balanceOf(user1),
-            balanceAfterTransfer
-        );
-        assertEq(
-            erc721Facet(address(diamond)).balanceOf(user2),
-            transferAmount
-        );
-    }
-
-    function testerc721Facet_TotalSupply() public {
+    function testERC721Facet_Balances() public {
         vm.prank(user1);
 
-        uint256 mintAmount = 2000e18;
-        erc721Facet(address(diamond)).mint(user1, mintAmount);
+        uint256 tokenId = 213;
+        uint256 tokenId2 = 123;
 
-        assertEq(erc721Facet(address(diamond)).totalSupply(), mintAmount);
+        ERC721_Diamond.mint(user1, tokenId);
+
+        ERC721_Diamond.mint(user1, tokenId2);
+
+        assertEq(ERC721_Diamond.balanceOf(user1), 2);
     }
 
-    function testerc721Facet_Mint() public {
-        uint256 mintAmount = 5000e18;
-        erc721Facet(address(diamond)).mint(user1, mintAmount);
-        assertEq(
-            erc721Facet(address(diamond)).totalSupply(),
-            erc721Facet(address(diamond)).balanceOf(user1)
-        );
-    }
-
-    function testerc721Facet_Burn() public {
-        uint256 mintAmount = 5000e18;
-        uint256 burnAmount = 200e18;
-        uint256 currentBalance = mintAmount - burnAmount;
-
-        testerc721Facet_Mint();
-        assertEq(erc721Facet(address(diamond)).totalSupply(), mintAmount);
-
-        erc721Facet(address(diamond)).burn(user1, burnAmount);
-
-        assertEq(
-            erc721Facet(address(diamond)).balanceOf(user1),
-            currentBalance
-        );
-    }
-
-    function testerc721Facet_Allowance() public {
+    function testERC721Facet_Owner() public {
         vm.prank(user1);
 
-        uint256 approvalAmount = 5000;
-        erc721Facet(address(diamond)).approve(user2, approvalAmount);
+        uint256 tokenId = 213;
+        uint256 tokenId2 = 12345;
 
-        assertEq(
-            erc721Facet(address(diamond)).allowance(user1, user2),
-            approvalAmount
-        );
+        ERC721_Diamond.mint(user1, tokenId);
+
+        assertEq(ERC721_Diamond.ownerOf(tokenId), user1);
+
+        vm.prank(user2);
+        ERC721_Diamond.mint(user2, tokenId2);
+
+        assertEq(ERC721_Diamond.ownerOf(tokenId2), user2);
     }
 
-    function testerc721Facet_Approve() public {
+    function testERC721Facet_tokenApproval() public {
+        uint256 tokenId = 210;
+        ERC721_Diamond.mint(user1, tokenId);
         vm.prank(user1);
+        ERC721_Diamond.approve(user2, tokenId);
 
-        uint256 approvedAmount = 50000;
-
-        assertTrue(
-            erc721Facet(address(diamond)).approve(user2, approvedAmount)
-        );
-
-        assertEq(
-            erc721Facet(address(diamond)).allowance(user1, user2),
-            approvedAmount
-        );
+        assertEq(ERC721_Diamond.getApproved(210), user2);
     }
 
-    function testerc721Facet_TransferFrom() public {
-        testerc721Facet_Mint();
+    function testERC721Facet_isApprovedForAll() public {
+        uint256 tokenId = 211;
+        uint256 tokenId2 = 215;
+        ERC721_Diamond.mint(user1, tokenId);
+        ERC721_Diamond.mint(user1, tokenId2);
+
         vm.prank(user1);
-        uint256 mintAmount = 5000e18;
-        uint256 approvalAmount = 500e18;
-        uint256 transferAmount = 5e18;
-        uint256 balanceAferTransfer = mintAmount - transferAmount;
-        uint256 currentApproval = approvalAmount - transferAmount;
+        ERC721_Diamond.setApprovalForAll(user2, true);
 
-        erc721Facet(address(diamond)).approve(address(this), approvalAmount);
-        assertTrue(
-            erc721Facet(address(diamond)).transferFrom(
-                user1,
-                user2,
-                transferAmount
-            )
-        );
-        assertEq(
-            erc721Facet(address(diamond)).allowance(user1, address(this)),
-            currentApproval
-        );
+        assertTrue(ERC721_Diamond.isApprovedForAll(user1, user2));
+    }
 
-        assertEq(
-            erc721Facet(address(diamond)).balanceOf(user1),
-            balanceAferTransfer
-        );
+    function testERC721Facet_Mint() public {
+        vm.prank(user1);
+        uint256 tokenId = 211;
+        uint256 tokenId2 = 215;
+        uint256 tokenId3 = 202345;
+        uint256 tokenId4 = 2155;
+        uint256 tokenId5 = 20256;
 
-        assertEq(
-            erc721Facet(address(diamond)).balanceOf(user2),
-            transferAmount
-        );
+        ERC721_Diamond.mint(user1, tokenId);
+        ERC721_Diamond.mint(user1, tokenId2);
+        ERC721_Diamond.mint(user1, tokenId3);
+        ERC721_Diamond.mint(user1, tokenId4);
+        ERC721_Diamond.mint(user1, tokenId5);
+
+        assertEq(ERC721_Diamond.balanceOf(user1), 5);
+    }
+
+    function testERC721Facet_transferFrom() public {
+        testERC721Facet_Mint();
+
+        vm.prank(user1);
+        ERC721_Diamond.setApprovalForAll(address(this), true);
+
+        ERC721_Diamond.transferFrom(user1, user2, 215);
+
+        assertEq(ERC721_Diamond.balanceOf(user1), 4);
+        assertEq(ERC721_Diamond.balanceOf(user2), 1);
+
+        assertEq(ERC721_Diamond.ownerOf(215), user2);
+        assertEq(ERC721_Diamond.ownerOf(20256), user1);
     }
 
     function diamondCut(

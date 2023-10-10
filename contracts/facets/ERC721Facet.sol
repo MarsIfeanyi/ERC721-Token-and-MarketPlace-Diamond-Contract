@@ -212,7 +212,6 @@ contract ERC721Facet {
         safeTransferFrom(from, to, tokenId, "");
     }
 
-    //Hint: Function Overloading = functions with the same name but different parameters
     function safeTransferFrom(
         address from,
         address to,
@@ -286,6 +285,10 @@ contract ERC721Facet {
             _checkOnERC721Received(address(0), to, tokenId, data),
             "ERC721: transfer to non ERC721Receiver implementer"
         );
+    }
+
+    function mint(address to, uint256 tokenId) external {
+        _mint(to, tokenId);
     }
 
     function _mint(address to, uint256 tokenId) internal {

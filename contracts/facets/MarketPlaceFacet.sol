@@ -23,21 +23,24 @@ contract MarketplaceFacet {
     event ListingExecuted(uint256 indexed listingId);
     event ListingEdited(uint256 indexed listingId);
 
-    // address token;
+    function diaStorage()
+        internal
+        pure
+        returns (LibDiamond.DiamondStorage storage)
+    {
+        return LibDiamond.diamondStorage();
+    }
 
-    // LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+    function sListingId() internal view returns (uint256) {
+        return LibDiamond.diamondStorage().listingId;
+    }
 
-    // constructor(address _token) {
-    //     token = _token;
-
-    //     admin = msg.sender;
-    // }
+    // diaStorage().lig [ds.]
 
     function createListing(
         address _token,
         uint256 _tokenId,
         uint256 _price,
-        bytes memory _signature,
         uint256 _deadline,
         address _seller,
         bool _isActive
@@ -57,55 +60,67 @@ contract MarketplaceFacet {
         IERC721(_token).transferFrom(msg.sender, address(this), _tokenId);
 
         // append to Storage
-        ListingInfo storage newListingInfo = listingsInfo[listingId];
+        // ListingInfo storage newListingInfo = listingsInfo[listingId];
 
-        newListingInfo.token = _token;
-        newListingInfo.tokenId = _tokenId;
-        newListingInfo.price = _price;
-        newListingInfo.signature = _signature;
-        newListingInfo.deadline = _deadline;
-        newListingInfo.seller = msg.sender;
-        newListingInfo.isActive = _isActive;
+        // diaStorage().
 
-        _listingId = listingId;
-        listingId++;
+        diaStorage().listingsInfo[sListingId()].token = _token;
+        diaStorage().listingsInfo[sListingId()].tokenId = _tokenId;
+        diaStorage().listingsInfo[sListingId()].price = _price;
+        diaStorage().listingsInfo[sListingId()].deadline = _deadline;
+        diaStorage().listingsInfo[sListingId()].seller = _seller;
+        diaStorage().listingsInfo[sListingId()].isActive = _isActive;
+
+        _listingId = diaStorage().listingId;
+        diaStorage().listingId++;
 
         // Emit event
-        emit ListingCreated(listingId);
+        emit ListingCreated(diaStorage().listingId);
 
-        return listingId;
+        return diaStorage().listingId;
     }
 
     function buyListing(uint256 _listingId) public payable {
-        if (_listingId >= listingId) revert ListingDoesNotExist();
+        if (_listingId >= diaStorage().listingId) revert ListingDoesNotExist();
 
-        ListingInfo storage listing = listingsInfo[_listingId];
+        //  ListingInfo storage listing = listingsInfo[_listingId];
+
+        diaStorage().listingsInfo[sListingId()];
 
         // checks if deadline is lessthan the currentTime
-        if (listing.deadline < block.timestamp) revert ListingExpired();
+        if (diaStorage().listingsInfo[sListingId()].deadline < block.timestamp)
+            revert ListingExpired();
 
-        if (!listing.isActive) revert ListingNotActive();
+        if (!diaStorage().listingsInfo[sListingId()].isActive)
+            revert ListingNotActive();
 
-        if (listing.price < msg.value) revert PriceMismatch(listing.price);
+        if (diaStorage().listingsInfo[sListingId()].price < msg.value)
+            revert PriceMismatch(diaStorage().listingsInfo[sListingId()].price);
 
-        if (listing.price != msg.value)
-            revert PriceNotMet(int256(listing.price) - int256(msg.value));
+        if (diaStorage().listingsInfo[sListingId()].price != msg.value)
+            revert PriceNotMet(
+                int256(diaStorage().listingsInfo[sListingId()].price) -
+                    int256(msg.value)
+            );
 
         // Update state
-        listing.isActive = false;
+
+        diaStorage().listingsInfo[sListingId()].isActive = false;
 
         // transfer
-        IERC721(listing.token).transferFrom(
-            listing.seller,
+        IERC721(diaStorage().listingsInfo[sListingId()].token).transferFrom(
+            diaStorage().listingsInfo[sListingId()].seller,
             msg.sender,
-            listing.tokenId
+            diaStorage().listingsInfo[sListingId()].tokenId
         );
 
         // transfer eth
-        payable(listing.seller).transfer(listing.price);
+        payable(diaStorage().listingsInfo[sListingId()].seller).transfer(
+            diaStorage().listingsInfo[sListingId()].price
+        );
 
         // Update storage
-        emit ListingExecuted(_listingId, listing);
+        emit ListingExecuted(_listingId);
     }
 
     function updateListing(
@@ -115,23 +130,24 @@ contract MarketplaceFacet {
     ) public {
         // require(_listingId > listingId, "Higher Higher");
 
-        if (_listingId > listingId) revert ListingDoesNotExist();
+        if (_listingId > diaStorage().listingId) revert ListingDoesNotExist();
 
-        ListingInfo storage listing = listingsInfo[_listingId];
+        // ListingInfo storage listing = listingsInfo[_listingId];
 
-        if (listing.seller != msg.sender) revert NotOwner();
+        if (diaStorage().listingsInfo[sListingId()].seller != msg.sender)
+            revert NotOwner();
 
-        listing.price = _newPrice;
-        listing.isActive = _isActive;
+        diaStorage().listingsInfo[sListingId()].price = _newPrice;
+        diaStorage().listingsInfo[sListingId()].isActive = _isActive;
 
-        emit ListingEdited(_listingId, listing);
+        emit ListingEdited(_listingId);
     }
 
     // add getter for listing
-    // function getListing(
-    //     uint256 _listingId
-    // ) public view returns (ListingInfo memory) {
-    //     // if (_listingId >= listingId)
-    //     return listingsInfo[_listingId];
-    // }
+    function getListing(
+        uint256 _listingId
+    ) public view returns (LibDiamond.ListingInfo memory) {
+        // if (_listingId >= listingId)
+        return diaStorage().listingsInfo[_listingId];
+    }
 }

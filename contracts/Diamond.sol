@@ -16,12 +16,14 @@ contract Diamond {
         address _contractOwner,
         address _diamondCutFacet,
         string memory _name,
-        string memory _symbol
+        string memory _symbol,
+        address NFTtokenAddress
     ) payable {
         LibDiamond.setContractOwner(_contractOwner);
 
         // Initializing name and symbol for ERC721Facet
         LibDiamond.setERC721Details(_name, _symbol);
+        LibDiamond.setMarketPlaceDetails(NFTtokenAddress);
 
         // Add the diamondCut external function from the diamondCutFacet
         IDiamondCut.FacetCut[] memory cut = new IDiamondCut.FacetCut[](1);

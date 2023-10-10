@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 
-contract MarketplaceFacet {
+contract NFTMarketplaceFacet {
     /* ERRORS */
     error NotOwner();
     error NotApproved();

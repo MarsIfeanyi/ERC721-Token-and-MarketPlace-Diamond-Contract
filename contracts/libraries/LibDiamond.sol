@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity >=0.7.0 <0.9.0;
 
 /******************************************************************************\
 * Author: Nick Mudge <nick@perfectabstractions.com> (https://twitter.com/mudgen)
@@ -24,6 +24,15 @@ library LibDiamond {
     bytes32 constant DIAMOND_STORAGE_POSITION =
         keccak256("diamond.standard.diamond.storage");
 
+    struct ListingInfo {
+        address token;
+        uint256 tokenId;
+        uint256 price;
+        uint256 deadline;
+        address seller;
+        bool isActive;
+    }
+
     struct FacetAddressAndPosition {
         address facetAddress;
         uint96 functionSelectorPosition; // position in facetFunctionSelectors.functionSelectors array
@@ -32,16 +41,6 @@ library LibDiamond {
     struct FacetFunctionSelectors {
         bytes4[] functionSelectors;
         uint256 facetAddressPosition; // position of facetAddress in facetAddresses array
-    }
-
-    struct ListingInfo {
-        address token;
-        uint256 tokenId;
-        uint256 price;
-        bytes signature;
-        uint256 deadline;
-        address seller;
-        bool isActive;
     }
 
     struct DiamondStorage {

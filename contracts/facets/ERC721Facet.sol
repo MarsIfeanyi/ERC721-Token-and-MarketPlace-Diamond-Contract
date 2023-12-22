@@ -32,6 +32,14 @@ contract ERC721Facet {
         uint256 indexed tokenId
     );
 
+    function diaStorage()
+        internal
+        pure
+        returns (LibDiamond.DiamondStorage storage)
+    {
+        return LibDiamond.diamondStorage();
+    }
+
     function name() external view returns (string memory) {
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
         return ds.name;
@@ -288,11 +296,13 @@ contract ERC721Facet {
     }
 
     function mint(address to, uint256 tokenId) external {
-        _mint(to, tokenId);
+        // LibDiamond.enforceIsContractOwner();
+        _safeMint(to, tokenId);
     }
 
     function _mint(address to, uint256 tokenId) internal {
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+
         require(to != address(0), "ERC721: mint to the zero address");
         // you can't mint with the tokenId that already exist.
         require(!_exists(tokenId), "ERC721: token already minted");

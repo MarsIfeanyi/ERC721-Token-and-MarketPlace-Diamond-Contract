@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.7.0 <0.9.0;
 import "forge-std/Test.sol";
 import "solidity-stringutils/strings.sol";
 
@@ -39,14 +41,5 @@ abstract contract DiamondUtils is Test {
             strings.slice memory selectr = s.split(comma).until(dbquote); // advance s to the next comma
         }
         return selectors;
-    }
-
-    function mkaddr(
-        string memory name
-    ) public returns (address addr, uint256 privateKey) {
-        privateKey = uint256(keccak256(abi.encodePacked(name)));
-
-        addr = vm.addr(privateKey);
-        vm.label(addr, name);
     }
 }

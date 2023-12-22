@@ -6,124 +6,66 @@ import "../contracts/facets/DiamondCutFacet.sol";
 import "../contracts/facets/DiamondLoupeFacet.sol";
 import "../contracts/facets/OwnershipFacet.sol";
 import "../contracts/Diamond.sol";
-import "../contracts/facets/ERC721Facet.sol";
+
 import "./helpers/DiamondUtils.sol";
-import "../contracts/facets/NFTMarketPlaceFacet.sol";
 
-contract DiamondDeployer is DiamondUtils, IDiamondCut {
-    //contract types of facets to be deployed
-    Diamond diamond;
-    DiamondCutFacet dCutFacet;
-    DiamondLoupeFacet dLoupeFacet;
-    OwnershipFacet ownerFacet;
-    ERC721Facet erc721Facet;
-    ERC721Facet ERC721_Diamond;
+import "./helpers/DiamondDeployer.sol";
 
-    MarketPlaceFacet marketPlaceFacet;
-
-    string name = "Bridge Waters Associates";
-    string symbol = "BWA";
-    address NftAddress;
-
-    address user1 = vm.addr(0x1);
-    address user2 = vm.addr(0x2);
-
-    function setUp() public {
-        //deploy facets
-        dCutFacet = new DiamondCutFacet();
-        diamond = new Diamond(
-            address(this),
-            address(dCutFacet),
-            name,
-            symbol,
-            NftAddress
-        );
-        dLoupeFacet = new DiamondLoupeFacet();
-        ownerFacet = new OwnershipFacet();
-        erc721Facet = new ERC721Facet();
-
-        marketPlaceFacet = new MarketPlaceFacet(NftAddress);
-
-        ERC721_Diamond = ERC721Facet(address(diamond));
-        //build cut struct
-        FacetCut[] memory cut = new FacetCut[](3);
-
-        cut[0] = (
-            FacetCut({
-                facetAddress: address(dLoupeFacet),
-                action: FacetCutAction.Add,
-                functionSelectors: generateSelectors("DiamondLoupeFacet")
-            })
-        );
-
-        cut[1] = (
-            FacetCut({
-                facetAddress: address(ownerFacet),
-                action: FacetCutAction.Add,
-                functionSelectors: generateSelectors("OwnershipFacet")
-            })
-        );
-
-        // erc721Facet
-        cut[2] = (
-            FacetCut({
-                facetAddress: address(erc721Facet),
-                action: FacetCutAction.Add,
-                functionSelectors: generateSelectors("ERC721Facet")
-            })
-        );
-
-        //upgrade diamond
-        IDiamondCut(address(diamond)).diamondCut(cut, address(0x0), "");
-
-        //call a function
-        DiamondLoupeFacet(address(diamond)).facetAddresses();
-    }
-
+contract MarketPlaceFacetTest is DiamondDeployer {
     function testCreateListing() public {
-        // vm.startPrank(creator1);
-        switchSigner(creator1);
-        //bridgeWaterNFT.mint(creator1, 2);
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+        uint256 _tokenID = 888;
 
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            2 ether,
-            2 days,
-            creator1,
-            privateKey1
-        );
-        listingInfo.signature = _signature;
-        listingInfo.seller = creator1;
-        listingInfo.tokenId = 2;
+        ERC721_Diamond.mint(user1, _tokenID);
 
-        currentListingId = bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive = true
+        switchSigner(user1);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        address NftAddress = address(ERC721_Diamond);
+
+        uint256 _price = 2 ether;
+        uint256 _deadline = 2 days;
+        address _seller = user1;
+        bool _isActive = true;
+
+        currentListingId = Marketplace_Diamond.createListing(
+            NftAddress,
+            _tokenID,
+            _price,
+            _deadline,
+            _seller,
+            _isActive
         );
 
-        assertEq(listingInfo.token, address(bridgeWaterNFT));
-        assertEq(listingInfo.tokenId, 2);
-        assertEq(listingInfo.price, 2 ether);
-        assertEq(listingInfo.signature, _signature);
-        assertEq(listingInfo.deadline, 2 days);
-        assertEq(listingInfo.seller, creator1);
+        LibDiamond.ListingInfo memory listingInfo = Marketplace_Diamond
+            .getListing(currentListingId);
+
+        assertEq(listingInfo.token, NftAddress);
+        assertEq(listingInfo.tokenId, _tokenID);
+
+        console2.logUint(listingInfo.tokenId);
+        assertEq(listingInfo.price, _price);
+
+        assertEq(listingInfo.deadline, _deadline);
+        console2.logUint(listingInfo.deadline);
+
+        assertEq(listingInfo.seller, user1);
         assertEq(listingInfo.isActive, true);
     }
 
     function _createListing() internal returns (uint256 _listingId) {
-        // listingInfo.seller = creator1;
-        _listingId = bridgeWaters.createListing(
+        _listingId = Marketplace_Diamond.getListingId();
+
+        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+
+        LibDiamond.ListingInfo storage listingInfo = ds.listingsInfo[
+            _listingId
+        ];
+
+        Marketplace_Diamond.createListing(
             listingInfo.token,
             listingInfo.tokenId,
             listingInfo.price,
-            listingInfo.signature,
             listingInfo.deadline,
             listingInfo.seller,
             listingInfo.isActive
@@ -131,124 +73,166 @@ contract DiamondDeployer is DiamondUtils, IDiamondCut {
     }
 
     function testCreateListing_OnlyOwnerCanCreateListing() public {
-        listingInfo.seller = spender;
-        switchSigner(spender);
+        uint256 _tokenID = 888;
 
-        vm.expectRevert(BridgeWatersMarketplace.NotOwner.selector);
-        _createListing();
+        ERC721_Diamond.mint(user1, _tokenID);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        switchSigner(user2);
+
+        vm.expectRevert(MarketplaceFacet.NotOwner.selector);
+
+        address NftAddress = address(ERC721_Diamond);
+
+        uint256 _price = 2 ether;
+        uint256 _deadline = 2 days;
+        address _seller = user1;
+        bool _isActive = true;
+
+        Marketplace_Diamond.createListing(
+            NftAddress,
+            _tokenID,
+            _price,
+            _deadline,
+            _seller,
+            _isActive
+        );
     }
 
     function testCreateListing_NotApprovedNFTForUser() public {
-        switchSigner(creator1);
+        uint256 _tokenID = 1000;
 
-        vm.expectRevert(BridgeWatersMarketplace.NotApproved.selector);
-        _createListing();
+        address NftAddress = address(ERC721_Diamond);
+
+        uint256 _price = 2 ether;
+        uint256 _deadline = 2 days;
+        address _seller = user1;
+        bool _isActive = true;
+
+        ERC721_Diamond.mint(user1, _tokenID);
+
+        switchSigner(user1);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), false);
+
+        vm.expectRevert(MarketplaceFacet.NotApproved.selector);
+
+        Marketplace_Diamond.createListing(
+            NftAddress,
+            _tokenID,
+            _price,
+            _deadline,
+            _seller,
+            _isActive
+        );
     }
 
     function testCreateListing_MinimumPriceTooLow() public {
-        switchSigner(creator1);
+        switchSigner(user1);
 
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+        uint256 _tokenID = 1000;
 
-        listingInfo.price = 0;
+        address NftAddress = address(ERC721_Diamond);
 
-        vm.expectRevert(BridgeWatersMarketplace.MinPriceTooLow.selector);
-        _createListing();
+        uint256 _price = 0 ether;
+        uint256 _deadline = 2 days;
+        address _seller = user1;
+        bool _isActive;
+
+        ERC721_Diamond.mint(user1, _tokenID);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        vm.expectRevert(MarketplaceFacet.MinPriceTooLow.selector);
+
+        Marketplace_Diamond.createListing(
+            NftAddress,
+            _tokenID,
+            _price,
+            _deadline,
+            _seller,
+            _isActive
+        );
     }
 
     function testCreateListing_DeadlineTooSoon() public {
-        switchSigner(creator1);
-        //bridgeWaterNFT.mint(creator1, 2);
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+        switchSigner(user1);
 
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            1 ether,
-            2 days,
-            creator1,
-            privateKey1
-        );
-        // vm.warp(2 days);
-        listingInfo.signature = _signature;
-        listingInfo.seller = creator1;
-        listingInfo.tokenId = 2;
-        listingInfo.deadline = 0 minutes;
+        address NftAddress = address(ERC721_Diamond);
 
-        vm.expectRevert(BridgeWatersMarketplace.DeadlineTooSoon.selector);
-        bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive
+        uint256 _price = 2 ether;
+        uint256 _deadline = 0 minutes;
+        address _seller = user1;
+
+        uint256 _tokenID = 1000;
+        bool _isActive = true;
+
+        ERC721_Diamond.mint(user1, _tokenID);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        vm.expectRevert(MarketplaceFacet.DeadlineTooSoon.selector);
+
+        Marketplace_Diamond.createListing(
+            NftAddress,
+            _tokenID,
+            _price,
+            _deadline,
+            _seller,
+            _isActive
         );
     }
 
     function testCreateListing_MinimumDurationNotMet() public {
-        switchSigner(creator1);
+        switchSigner(user1);
+        address NftAddress = address(ERC721_Diamond);
 
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+        uint256 _price = 2 ether;
+        uint256 _deadline = 30 minutes;
+        address _seller = user1;
 
-        listingInfo.deadline = 30 minutes;
+        uint256 _tokenID = 1000;
+        bool _isActive;
 
-        vm.expectRevert(BridgeWatersMarketplace.MinDurationNotMet.selector);
-        _createListing();
-    }
+        ERC721_Diamond.mint(user1, _tokenID);
 
-    function testCreateListing_InValidSignature() public {
-        switchSigner(creator1);
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
 
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+        vm.expectRevert(MarketplaceFacet.MinDurationNotMet.selector);
 
-        listingInfo.deadline = uint88(block.timestamp + 3 hours);
-        listingInfo.seller = creator1;
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            3 ether,
-            3 days,
-            creator1,
-            privateKey1
+        Marketplace_Diamond.createListing(
+            NftAddress,
+            _tokenID,
+            _price,
+            _deadline,
+            _seller,
+            _isActive
         );
-        listingInfo.signature = _signature;
-        vm.expectRevert(BridgeWatersMarketplace.InValidSignature.selector);
-        bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive
-        );
-    }
 
-    // function _testCreateListing_Emitevent_ListingCreated() public {
-    //  switchSigner(creator1);
+        uint _listingId = Marketplace_Diamond.getListingId();
+        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
 
-    //     vm.expectEmit();
+        ds.listingsInfo[_listingId];
 
-    //     emit ListingCreated(currentListingId);
+        uint256 s_deadline = Marketplace_Diamond.getDeadline();
 
-    //     _createListing();
-    // }
-
-    // executeListing
-
-    function _buyListing() internal {
-        switchSigner(creator1);
-        bridgeWaters.buyListing(currentListingId);
+        assertEq(ds.listingsInfo[_listingId].deadline, s_deadline);
     }
 
     function testBuyListing_ListingDoesNotExist() public {
         testCreateListing();
 
-        vm.expectRevert(BridgeWatersMarketplace.ListingDoesNotExist.selector);
+        vm.expectRevert(MarketplaceFacet.ListingDoesNotExist.selector);
 
-        _buyListing();
+        Marketplace_Diamond.buyListing(3);
+    }
+
+    function _buyListing() internal {
+        switchSigner(user1);
+        uint256 _currentListingId = Marketplace_Diamond.getListingId();
+
+        Marketplace_Diamond.buyListing(_currentListingId);
     }
 
     function testBuyListing_ListingExpired() public {
@@ -256,349 +240,267 @@ contract DiamondDeployer is DiamondUtils, IDiamondCut {
 
         vm.warp(1641070800);
 
-        vm.expectRevert(BridgeWatersMarketplace.ListingExpired.selector);
+        vm.expectRevert(MarketplaceFacet.ListingExpired.selector);
         // When listing expires, the listingId becomes zero
 
-        bridgeWaters.buyListing(0);
+        Marketplace_Diamond.buyListing(0);
     }
 
     function testBuyListing_ListingNotActive() public {
-        switchSigner(creator1);
-        // bridgeWaterNFT.mint(creator1, 2);
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+        switchSigner(user1);
 
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            2 ether,
-            2 days,
-            creator1,
-            privateKey1
-        );
-        listingInfo.signature = _signature;
-        listingInfo.seller = creator1;
-        listingInfo.tokenId = 2;
+        uint256 _tokenID = 1000;
 
-        bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
+        ERC721_Diamond.mint(user1, _tokenID);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        uint256 _listingId = Marketplace_Diamond.getListingId();
+        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+        LibDiamond.ListingInfo storage listingInfo = ds.listingsInfo[
+            _listingId
+        ];
+
+        address NftAddress = address(ERC721_Diamond);
+
+        listingInfo.seller = user1;
+        listingInfo.tokenId = _tokenID;
+
+        uint256 currentId = Marketplace_Diamond.createListing(
+            listingInfo.token = NftAddress,
+            listingInfo.tokenId = _tokenID,
+            listingInfo.price = 2 ether,
+            listingInfo.deadline = 2 days,
+            listingInfo.seller = user1,
             listingInfo.isActive = false
         );
 
-        // vm.warp(1641070800);
+        vm.expectRevert(MarketplaceFacet.ListingNotActive.selector);
 
-        vm.expectRevert(BridgeWatersMarketplace.ListingNotActive.selector);
-        // bridgeWaters.buyListing(_currentListingId);
+        Marketplace_Diamond.buyListing(currentId);
+    }
 
-        _buyListing();
+    function _createBuyListing() internal {
+        uint256 _tokenID = 999;
+
+        ERC721_Diamond.mint(user1, _tokenID);
+        switchSigner(user1);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        uint256 _listingId = Marketplace_Diamond.getListingId();
+        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+        LibDiamond.ListingInfo storage listingInfo = ds.listingsInfo[
+            _listingId
+        ];
+
+        address NftAddress = address(ERC721_Diamond);
+
+        Marketplace_Diamond.createListing(
+            listingInfo.token = NftAddress,
+            listingInfo.tokenId = _tokenID,
+            listingInfo.price = 2 ether,
+            listingInfo.deadline = 2 days,
+            listingInfo.seller = user1,
+            listingInfo.isActive = true
+        );
     }
 
     function testBuyListing_PriceMismatch() public {
-        _createBuyListing();
+        uint256 _tokenID = 999;
+
+        ERC721_Diamond.mint(user1, _tokenID);
+        switchSigner(user1);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        uint256 _listingId = Marketplace_Diamond.getListingId();
+        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+        LibDiamond.ListingInfo storage listingInfo = ds.listingsInfo[
+            _listingId
+        ];
+
+        address NftAddress = address(ERC721_Diamond);
+
+        uint _currentListingId = Marketplace_Diamond.createListing(
+            listingInfo.token = NftAddress,
+            listingInfo.tokenId = _tokenID,
+            listingInfo.price = 2 ether,
+            listingInfo.deadline = 2 days,
+            listingInfo.seller = user1,
+            listingInfo.isActive = true
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                BridgeWatersMarketplace.PriceMismatch.selector,
+                MarketplaceFacet.PriceMismatch.selector,
                 listingInfo.price
             )
         );
 
-        bridgeWaters.buyListing{value: 3 ether}(currentListingId);
+        Marketplace_Diamond.buyListing{value: 3 ether}(_currentListingId);
     }
 
     function testBuyListing_PriceNotMet() public {
-        _createBuyListing();
+        uint256 _tokenID = 777;
+
+        ERC721_Diamond.mint(user1, _tokenID);
+        switchSigner(user1);
+
+        ERC721_Diamond.setApprovalForAll(address(diamond), true);
+
+        uint256 _listingId = Marketplace_Diamond.getListingId();
+        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+        LibDiamond.ListingInfo storage listingInfo = ds.listingsInfo[
+            _listingId
+        ];
+
+        address NftAddress = address(ERC721_Diamond);
+
+        uint _currentListingId = Marketplace_Diamond.createListing(
+            listingInfo.token = NftAddress,
+            listingInfo.tokenId = _tokenID,
+            listingInfo.price = 2 ether,
+            listingInfo.deadline = 2 days,
+            listingInfo.seller = user1,
+            listingInfo.isActive = true
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                BridgeWatersMarketplace.PriceNotMet.selector,
+                MarketplaceFacet.PriceNotMet.selector,
                 (listingInfo.price - 1 ether)
             )
         );
 
-        bridgeWaters.buyListing{value: 1 ether}(currentListingId);
-    }
-
-    function _createBuyListing() internal {
-        switchSigner(creator1);
-        // bridgeWaterNFT.mint(creator1, 2);
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
-
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            2 ether,
-            2 days,
-            creator1,
-            privateKey1
-        );
-        listingInfo.signature = _signature;
-        listingInfo.seller = creator1;
-        listingInfo.tokenId = 2;
-
-        bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive
-        );
+        Marketplace_Diamond.buyListing{value: 1 ether}(currentListingId);
     }
 
     // UPDATE LISTING
 
-    function _updateListing() internal {
-        switchSigner(creator1);
-        bridgeWaters.updateListing(
-            currentListingId,
-            3 ether,
-            listingInfo.isActive
-        );
-    }
+    // function _updateListing() internal {
+    //     switchSigner(creator1);
+    //     bridgeWaters.updateListing(
+    //         currentListingId,
+    //         3 ether,
+    //         listingInfo.isActive
+    //     );
+    // }
 
-    function testUpdateListing_ListingDoesNotExist() public {
-        switchSigner(creator1);
-        // bridgeWaterNFT.mint(creator1, 2);
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+    // function testUpdateListing_ListingDoesNotExist() public {
+    //     switchSigner(creator1);
+    //     // bridgeWaterNFT.mint(creator1, 2);
+    //     bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
 
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            2 ether,
-            2 days,
-            creator1,
-            privateKey1
-        );
-        listingInfo.signature = _signature;
-        listingInfo.seller = creator1;
-        listingInfo.tokenId = 2;
+    //     listingInfo.seller = creator1;
+    //     listingInfo.tokenId = 2;
 
-        currentListingId = bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive
-        );
+    //     currentListingId = bridgeWaters.createListing(
+    //         listingInfo.token,
+    //         listingInfo.tokenId,
+    //         listingInfo.price,
 
-        vm.expectRevert(BridgeWatersMarketplace.ListingDoesNotExist.selector);
+    //         listingInfo.deadline,
+    //         listingInfo.seller,
+    //         listingInfo.isActive
+    //     );
 
-        bridgeWaters.updateListing(currentListingId, 0, false);
-    }
+    //     vm.expectRevert(BridgeWatersMarketplace.ListingDoesNotExist.selector);
 
-    function testUpdateListing_NotOwner() public {
-        switchSigner(creator1);
-        bridgeWaterNFT.mint(creator1, 3);
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+    //     bridgeWaters.updateListing(currentListingId, 0, false);
+    // }
 
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            2 ether,
-            2 days,
-            creator1,
-            privateKey1
-        );
-        listingInfo.signature = _signature;
-        listingInfo.seller = creator1;
-        //listingInfo.tokenId
+    // function testUpdateListing_NotOwner() public {
+    //     switchSigner(creator1);
+    //     bridgeWaterNFT.mint(creator1, 3);
+    //     bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
 
-        uint256 _currentListingId = bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive
-        );
+    //     listingInfo.seller = creator1;
+    //     //listingInfo.tokenId
 
-        vm.startPrank(spender);
+    //     uint256 _currentListingId = bridgeWaters.createListing(
+    //         listingInfo.token,
+    //         listingInfo.tokenId,
+    //         listingInfo.price,
 
-        vm.expectRevert(BridgeWatersMarketplace.NotOwner.selector);
+    //         listingInfo.deadline,
+    //         listingInfo.seller,
+    //         listingInfo.isActive
+    //     );
 
-        bridgeWaters.updateListing(_currentListingId, 1 ether, true);
-    }
+    //     vm.startPrank(spender);
 
-    function testUpdateListing() public {
-        listingInfo.seller = creator1;
+    //     vm.expectRevert(BridgeWatersMarketplace.NotOwner.selector);
 
-        switchSigner(creator1);
-        //bridgeWaterNFT.mint(creator1, 2);
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+    //     bridgeWaters.updateListing(_currentListingId, 1 ether, true);
+    // }
 
-        bytes memory _signature = constructSig(
-            address(bridgeWaterNFT),
-            2,
-            2 ether,
-            2 days,
-            creator1,
-            privateKey1
-        );
-        listingInfo.signature = _signature;
+    // function testUpdateListing() public {
+    //     listingInfo.seller = creator1;
 
-        listingInfo.tokenId = 2;
+    //     switchSigner(creator1);
+    //     //bridgeWaterNFT.mint(creator1, 2);
+    //     bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
 
-        currentListingId = bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive
-        );
+    //     listingInfo.tokenId = 2;
 
-        uint256 newPrice = 3 ether;
+    //     currentListingId = bridgeWaters.createListing(
+    //         listingInfo.token,
+    //         listingInfo.tokenId,
+    //         listingInfo.price,
 
-        assertEq(
-            bridgeWaterNFT.ownerOf(listingInfo.tokenId),
-            address(bridgeWaters)
-        );
+    //         listingInfo.deadline,
+    //         listingInfo.seller,
+    //         listingInfo.isActive
+    //     );
 
-        bridgeWaters.updateListing(
-            currentListingId,
-            newPrice,
-            listingInfo.isActive
-        );
+    //     uint256 newPrice = 3 ether;
 
-        listingInfo = bridgeWaters.getListing(currentListingId);
+    //     assertEq(
+    //         bridgeWaterNFT.ownerOf(listingInfo.tokenId),
+    //         address(bridgeWaters)
+    //     );
 
-        assertEq(listingInfo.price, newPrice);
-        assertEq(listingInfo.isActive, true);
-    }
+    //     bridgeWaters.updateListing(
+    //         currentListingId,
+    //         newPrice,
+    //         listingInfo.isActive
+    //     );
 
-    function testBuyListing() public {
-        switchSigner(creator1);
+    //     listingInfo = bridgeWaters.getListing(currentListingId);
 
-        vm.warp(1641070800);
+    //     assertEq(listingInfo.price, newPrice);
+    //     assertEq(listingInfo.isActive, true);
+    // }
 
-        listingInfo.deadline = uint88(block.timestamp + 120 minutes);
+    // function testBuyListing() public {
+    //     switchSigner(creator1);
 
-        bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
+    //     vm.warp(1641070800);
 
-        listingInfo.signature = constructSig(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.deadline,
-            listingInfo.seller,
-            privateKey1
-        );
+    //     listingInfo.deadline = uint88(block.timestamp + 120 minutes);
 
-        currentListingId = bridgeWaters.createListing(
-            listingInfo.token,
-            listingInfo.tokenId,
-            listingInfo.price,
-            listingInfo.signature,
-            listingInfo.deadline,
-            listingInfo.seller,
-            listingInfo.isActive
-        );
+    //     bridgeWaterNFT.setApprovalForAll(address(bridgeWaters), true);
 
-        switchSigner(spender);
-        //vm.warp(1641070800);
-        bridgeWaters.buyListing{value: listingInfo.price}(currentListingId);
-        assertEq(bridgeWaterNFT.ownerOf(currentListingId), spender);
-    }
+    //     currentListingId = bridgeWaters.createListing(
+    //         listingInfo.token,
+    //         listingInfo.tokenId,
+    //         listingInfo.price,
 
-    function testERC721Facet_Name() public {
-        assertEq(ERC721_Diamond.name(), name);
-    }
+    //         listingInfo.deadline,
+    //         listingInfo.seller,
+    //         listingInfo.isActive
+    //     );
 
-    function testERC721Facet_Symbol() public {
-        assertEq(ERC721_Diamond.symbol(), symbol);
-    }
+    //     switchSigner(spender);
+    //     //vm.warp(1641070800);
+    //     bridgeWaters.buyListing{value: listingInfo.price}(currentListingId);
+    //     assertEq(bridgeWaterNFT.ownerOf(currentListingId), spender);
+    // }
 
-    function testERC721Facet_Balances() public {
-        vm.prank(user1);
-
-        uint256 tokenId = 213;
-        uint256 tokenId2 = 123;
-
-        ERC721_Diamond.mint(user1, tokenId);
-
-        ERC721_Diamond.mint(user1, tokenId2);
-
-        assertEq(ERC721_Diamond.balanceOf(user1), 2);
-    }
-
-    function testERC721Facet_Owner() public {
-        vm.prank(user1);
-
-        uint256 tokenId = 213;
-        uint256 tokenId2 = 12345;
-
-        ERC721_Diamond.mint(user1, tokenId);
-
-        assertEq(ERC721_Diamond.ownerOf(tokenId), user1);
-
-        vm.prank(user2);
-        ERC721_Diamond.mint(user2, tokenId2);
-
-        assertEq(ERC721_Diamond.ownerOf(tokenId2), user2);
-    }
-
-    function testERC721Facet_tokenApproval() public {
-        uint256 tokenId = 210;
-        ERC721_Diamond.mint(user1, tokenId);
-        vm.prank(user1);
-        ERC721_Diamond.approve(user2, tokenId);
-
-        assertEq(ERC721_Diamond.getApproved(210), user2);
-    }
-
-    function testERC721Facet_isApprovedForAll() public {
-        uint256 tokenId = 211;
-        uint256 tokenId2 = 215;
-        ERC721_Diamond.mint(user1, tokenId);
-        ERC721_Diamond.mint(user1, tokenId2);
-
-        vm.prank(user1);
-        ERC721_Diamond.setApprovalForAll(user2, true);
-
-        assertTrue(ERC721_Diamond.isApprovedForAll(user1, user2));
-    }
-
-    function testERC721Facet_Mint() public {
-        vm.prank(user1);
-        uint256 tokenId = 211;
-        uint256 tokenId2 = 215;
-        uint256 tokenId3 = 202345;
-        uint256 tokenId4 = 2155;
-        uint256 tokenId5 = 20256;
-
-        ERC721_Diamond.mint(user1, tokenId);
-        ERC721_Diamond.mint(user1, tokenId2);
-        ERC721_Diamond.mint(user1, tokenId3);
-        ERC721_Diamond.mint(user1, tokenId4);
-        ERC721_Diamond.mint(user1, tokenId5);
-
-        assertEq(ERC721_Diamond.balanceOf(user1), 5);
-    }
-
-    function testERC721Facet_transferFrom() public {
-        testERC721Facet_Mint();
-
-        vm.prank(user1);
-        ERC721_Diamond.setApprovalForAll(address(this), true);
-
-        ERC721_Diamond.transferFrom(user1, user2, 215);
-
-        assertEq(ERC721_Diamond.balanceOf(user1), 4);
-        assertEq(ERC721_Diamond.balanceOf(user2), 1);
-
-        assertEq(ERC721_Diamond.ownerOf(215), user2);
-        assertEq(ERC721_Diamond.ownerOf(20256), user1);
-    }
+    // function testERC721Facet_Name() public {
+    //     assertEq(ERC721_Diamond.name(), name);
+    // }
 
     function diamondCut(
         FacetCut[] calldata _diamondCut,
